@@ -19,7 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@/src/*": ["./src/*"],
+      "@/sdk/*": ["./src/sdk/*"],
+      "@/sdk": ["./src/sdk/index.ts"],
+      "@/lib/*": ["./src/lib/*"],
+      "@/lib": ["./src/lib/db.ts"],
+      "@/types": ["./src/types/index.ts"]
     }
   },
   "include": [
