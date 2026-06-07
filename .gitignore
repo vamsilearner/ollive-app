@@ -33,6 +33,17 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# SQLite
+ollive.db
+ollive.db-shm
+ollive.db-wal
+
+# Drizzle ORM
+/drizzle
+
+# Generated types
+*.d.ts
+
 # vercel
 .vercel
 

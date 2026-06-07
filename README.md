@@ -1,37 +1,49 @@
 # Ollive - LLM Inference Logging & Ingestion System
 
-A production-ready LLM chatbot with real-time inference logging, ingestion pipeline, PostgreSQL storage, streaming responses, analytics dashboard, and one-command Docker setup.
+A production-ready LLM chatbot architecture featuring real-time inference logging, an asynchronous ingestion pipeline, SQLite storage, streaming responses, an analytics dashboard, and a one-command Docker orchestration setup.
+
+---
+
+### Candidate Profile
+
+- **Developer:** Kancharla Vamsikrishna Prasad
+- **mail-id:** vamsik.inn@gmail.com
+<!-- - **CloudHire Portfolio:** [View Full Profile & Experience](https://jobs.cloudhire.ai/user/b048faaa-1368-40c5-a8fb-59a7c23cfc8f) -->
+
+---
 
 ## Quick Start
 
 ```bash
-# 1. Clone and setup
+# 1. Clone and setup environment variables
 cp .env.example .env
-# Edit .env and add your LLM API keys (at least one required)
+# Edit .env and append your target LLM API keys (at least one required)
 
-# 2. One-command start
+# 2. Spin up the localized containerized environment
 docker compose up -d
 
-# 3. Run migrations
+# 3. Generate and execute database migrations via Drizzle
 docker compose exec app npx drizzle-kit generate
 docker compose exec app npx drizzle-kit migrate
 
-# 4. Open
-# Chat: http://localhost:3000/chat
-# Dashboard: http://localhost:3000/dashboard
-# DB Admin: http://localhost:8080
-```
+# 4. Access the Local Core System
+# Chat Interface:      http://localhost:3000/chat
+# Metrics Dashboard:   http://localhost:3000/dashboard
+# Database Admin UI:   http://localhost:8080
 
-## Local Development
+## Local Development (Alternative to Docker)
 
-```bash
-# Start PostgreSQL
+# Spin up isolated database container dependencies if needed
 docker compose up -d postgres
 
-# Install and run
+# Install dependencies locally
 npm install
+
+# Run database provisioning schemas
 npx drizzle-kit generate
 npx drizzle-kit migrate
+
+# Fire up the local Next.js development server
 npm run dev
 ```
 
@@ -46,8 +58,8 @@ npm run dev
                                       (Async Ingest Payload)
                                                 v
 +-------------+                       +-------------------+
-| PostgreSQL  | <-------------------- | Ingestion API     |
-|  Database   |                       |  /api/logs        |
+|  SQLite DB  | <-------------------- | Ingestion API     |
+|   File      |                       |  /api/logs        |
 +-------------+                       +-------------------+
 ```
 
@@ -63,35 +75,45 @@ npm run dev
 
 5. **Streaming via ReadableStream**: Native Web API streaming through Next.js API routes. No SSE or WebSocket complexity for this scope.
 
+6. **SQLite for Simplicity**: Uses a file-based SQLite database for development and simplicity. For production (e.g., Kubernetes), switch to PostgreSQL by updating the database adapter in `src/lib/db.ts` and the schema dialect.
+
 ## Schema Design
 
 ### sessions
+
 Tracks user chat sessions with lifecycle status.
-- `id` (UUID PK), `title`, `status` (active/cancelled/completed), `created_at`, `updated_at`
+
+- `id` (text PK), `title`, `status` (active/cancelled/completed), `created_at`, `updated_at`
 
 ### messages
+
 Stores individual conversation turns, linked to sessions.
-- `id` (UUID PK), `session_id` (FK cascade), `role` (user/assistant/system), `content`, `created_at`
+
+- `id` (text PK), `session_id` (FK cascade), `role` (user/assistant/system), `content`, `created_at`
 
 ### inference_logs
+
 Deep technical metrics for every LLM call, tied to assistant messages.
-- `id` (UUID PK), `session_id` (FK cascade), `message_id` (FK set null)
+
+- `id` (text PK), `session_id` (FK cascade), `message_id` (FK set null)
 - `provider`, `model`, `latency_ms`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `throughput_tokens_per_sec`
 - `status_code` (SUCCESS/ERROR), `error_message`, `input_preview`, `output_preview` (PII-redacted), `timestamp`
 
 ### Why Relational?
-PostgreSQL enforces that inference logs cannot exist without valid session context. This preserves dashboard data integrity and enables efficient aggregation queries.
+
+SQLite enforces that inference logs cannot exist without valid session context. This preserves dashboard data integrity and enables efficient aggregation queries.
 
 ## Trade-offs
 
-| Decision | Choice | Why | Production Alternative |
-|----------|--------|-----|----------------------|
-| Architecture | Monorepo (Next.js API routes) | Interview scope, simpler deployment | Separate ingestion service |
-| Ingestion | Direct DB write | Minimal infrastructure | Kafka/RabbitMQ for write spikes |
-| ORM | Drizzle | SQL-transparent, lightweight | Prisma or raw SQL |
-| Streaming | ReadableStream | Web standard, no extra deps | SSE for long-lived connections |
-| PII Redaction | Regex patterns | Pragmatic, covers common cases | NLP-based PII detection |
-| Retry | Exponential backoff + queue | Simple, handles transient failures | Persistent message queue |
+| Decision      | Choice                        | Why                                 | Production Alternative            |
+| ------------- | ----------------------------- | ----------------------------------- | --------------------------------- |
+| Architecture  | Monorepo (Next.js API routes) | Interview scope, simpler deployment | Separate ingestion service        |
+| Ingestion     | Direct DB write               | Minimal infrastructure              | Kafka/RabbitMQ for write spikes   |
+| ORM           | Drizzle                       | SQL-transparent, lightweight        | Prisma or raw SQL                 |
+| Streaming     | ReadableStream                | Web standard, no extra deps         | SSE for long-lived connections    |
+| PII Redaction | Regex patterns                | Pragmatic, covers common cases      | NLP-based PII detection           |
+| Retry         | Exponential backoff + queue   | Simple, handles transient failures  | Persistent message queue          |
+| Database      | SQLite (file)                 | Simplicity, zero-config for dev     | PostgreSQL for production scaling |
 
 ## Scaling Considerations
 
@@ -99,9 +121,11 @@ PostgreSQL enforces that inference logs cannot exist without valid session conte
 
 2. **Read Heavy Dashboard**: Add materialized views or a read replica for dashboard queries. The aggregation SQL is already optimized with time-bucket grouping.
 
-3. **Multi-Region**: The SDK's async dispatch can target regional ingestion endpoints. Session data can be replicated via PostgreSQL logical replication.
+3. **Multi-Region**: The SDK's async dispatch can target regional ingestion endpoints. Session data can be replicated via database replication (e.g., PostgreSQL logical replication).
 
 4. **Rate Limiting**: Add per-session and per-user rate limits at the API route level. The session model supports this naturally.
+
+5. **Database Scaling**: For production, migrate from SQLite to PostgreSQL or another scalable database. Update `src/lib/db.ts` to use `drizzle-orm/pg` and adjust the schema dialect.
 
 ## Failure Handling
 
@@ -112,24 +136,27 @@ PostgreSQL enforces that inference logs cannot exist without valid session conte
 
 ## Bonus Features Completed
 
-| Feature | Status | Implementation |
-|---------|--------|---------------|
-| Multi-provider support | Done | Gemini, OpenAI, Anthropic with unified interface |
-| Streaming responses | Done | ReadableStream with chunk-by-chunk UI updates |
-| Latency/Throughput/Error dashboard | Done | Recharts with live PostgreSQL aggregation |
-| Docker Compose setup | Done | One-command `docker compose up` |
-| Event-based architecture | Done | Async log queue with batching and retry |
-| PII redaction | Done | Regex-based redaction before logging |
-| Cancel conversations | Done | AbortController integration |
-| List/resume sessions | Done | Session sidebar with full history restore |
+| Feature                            | Status    | Implementation                                                                           |
+| ---------------------------------- | --------- | ---------------------------------------------------------------------------------------- |
+| Multi-provider support             | Done      | Gemini, OpenAI, Anthropic with unified interface                                         |
+| Streaming responses                | Done      | ReadableStream with chunk-by-chunk UI updates                                            |
+| Latency/Throughput/Error dashboard | Done      | Recharts with live SQLite aggregation                                                    |
+| Docker Compose setup               | Partially | The provided docker-compose is for PostgreSQL; for SQLite, no external service is needed |
+| Event-based architecture           | Done      | Async log queue with batching and retry                                                  |
+| PII redaction                      | Done      | Regex-based redaction before logging                                                     |
+| Cancel conversations               | Done      | AbortController integration                                                              |
+| List/resume sessions               | Done      | Session sidebar with full history restore                                                |
 
 ## Kubernetes Deployment
 
-Basic K8s manifests are available in `k8s/`:
+Basic K8s manifests are available in `k8s/` for a PostgreSQL deployment:
+
 - `deployment.yaml` - Next.js app deployment
 - `service.yaml` - ClusterIP service
 - `configmap.yaml` - Environment configuration
 - `postgres-statefulset.yaml` - PostgreSQL StatefulSet with PVC
+
+**Note**: To use these manifests, you must first update the database adapter in `src/lib/db.ts` to use PostgreSQL and adjust the schema dialect in `drizzle.config.ts` to `postgresql`. The SQLite implementation is not suitable for multi-pod deployments without external storage.
 
 ## What I'd Improve With More Time
 
@@ -141,25 +168,28 @@ Basic K8s manifests are available in `k8s/`:
 6. **A/B Testing**: Route traffic between providers and compare latency/quality
 7. **Prompt Templates**: Saved prompt templates with versioning
 8. **Export**: CSV/JSON export of inference logs and session data
+9. **Production Database**: Fully test and document the migration to PostgreSQL for production
 
 ## Tech Stack
 
 - **Frontend**: Next.js 15 (App Router) + TypeScript + TailwindCSS
 - **Backend**: Next.js API Routes
-- **Database**: PostgreSQL 16
+- **Database**: SQLite (file) via better-sqlite3
 - **ORM**: Drizzle ORM
 - **LLM SDK**: Custom multi-provider wrapper (Gemini + OpenAI + Anthropic)
 - **Charts**: Recharts
 - **Markdown**: react-markdown + remark-gfm
-- **Containerization**: Docker + Docker Compose
+- **Containerization**: Docker (optional, for PostgreSQL variant)
 
 ## Architecture Notes
+
 Detailed architecture notes, including ingestion flow, logging strategy, scaling considerations, and failure handling assumptions, are available in [ARCHITECTURE_NOTES.md](./ARCHITECTURE_NOTES.md).
 
 ## Demo
+
 To run a local demo, follow the [Quick Start](#quick-start) steps above. The application will be available at:
+
 - Chat: http://localhost:3000/chat
 - Dashboard: http://localhost:3000/dashboard
-- Database Admin (phpMyAdmin): http://localhost:8080
 
-Alternatively, we can deploy to a cloud provider (e.g., Vercel for frontend, Render for backend) but that is beyond the scope of this README.
+Note: The SQLite database file (`ollive.db`) will be created in the project root on first run.

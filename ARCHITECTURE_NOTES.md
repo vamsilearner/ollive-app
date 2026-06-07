@@ -20,12 +20,12 @@
 ## Logging Strategy
 
 - **What is logged**: Every LLM inference call generates a log entry with:
-  - Core identifiers: session_id, message_id (foreign key to messages)
-  - Provider/model details: provider name, model name
-  - Performance: latency_ms, token counts (prompt/completion/total), throughput
-  - Outcome: status_code (SUCCESS/ERROR), error_message if applicable
-  - Data samples: truncated input_preview and output_preview (PII-redacted)
-  - Timestamps: request start/end times
+   - Core identifiers: session_id, message_id (foreign key to messages)
+   - Provider/model details: provider name, model name
+   - Performance: latency_ms, token counts (prompt/completion/total), throughput
+   - Outcome: status_code (SUCCESS/ERROR), error_message if applicable
+   - Data samples: truncated input_preview and output_preview (PII-redacted)
+   - Timestamps: request start/end times
 - **PII Redaction**: Uses regex patterns to redact emails, phone numbers, SSNs, and credit card numbers from previews before logging.
 - **Async Dispatch**: Logging is fire-and-forget relative to the chat response to avoid impacting user experience. Failed logs are retried with backoff.
 - **Data Verbosity**: Stores full message content in `messages` table for conversation reconstruction, while `inference_logs` focuses on technical metrics.
@@ -33,7 +33,7 @@
 ## Scaling Considerations
 
 1. **Ingestion Throughput**:
-   - Current: Direct writes to PostgreSQL via API route
+   - Current: Direct writes to SQLite via API route
    - Scale path: Introduce a message buffer (Redis Streams or Apache Kafka) between SDK and ingestion API to absorb write spikes
    - The SDK's batching/retry mechanism would adapt to send to the buffer instead
 2. **Read Scaling**:
@@ -42,29 +42,29 @@
 3. **Horizontal Scaling**:
    - Next.js app is stateless except for WebSocket connections (not used here)
    - Can scale API routes via container orchestration (Kubernetes) with load balancing
-   - PostgreSQL would require scaling vertically or via read replicas
+   - SQLite would require scaling vertically (since it's file-based) or consider migrating to PostgreSQL for horizontal scaling
 4. **Session Storage**:
-   - Currently stored in PostgreSQL; no scaling limits expected for MVP
-   - For massive scale: consider separating session metadata to a faster store (Redis) with PostgreSQL as source of truth
+   - Currently stored in SQLite; no scaling limits expected for MVP
+   - For massive scale: consider separating session metadata to a faster store (Redis) and migrating to PostgreSQL as the source of truth
 
 ## Failure Handling Assumptions
 
 - **Ingestion Failure**:
-  - Assumed transient; SDK retries with exponential backoff (3 attempts)
-  - After final failure, logs are dropped but chat continues unaffected
-  - Failed logs are console-warned for operator awareness
+   - Assumed transient; SDK retries with exponential backoff (3 attempts)
+   - After final failure, logs are dropped but chat continues unaffected
+   - Failed logs are console-warned for operator awareness
 - **LLM Provider Failure**:
-  - Errors are caught, logged with status_code=ERROR, and user sees error message
-  - Chat UI displays error and allows retry or new conversation
+   - Errors are caught, logged with status_code=ERROR, and user sees error message
+   - Chat UI displays error and allows retry or new conversation
 - **Database Failure**:
-  - Ingestion API returns 500; SDK treats as transient failure and retries
-  - Streamed chat response is already delivered to user (non-blocking design)
+   - Ingestion API returns 500; SDK treats as transient failure and retries
+   - Streamed chat response is already delivered to user (non-blocking design)
 - **Network Partitions**:
-  - SDK uses `navigator.onLine` to detect offline state and queues logs
-  - On reconnection, queued logs are flushed with retry logic
+   - SDK uses `navigator.onLine` to detect offline state and queues logs
+   - On reconnection, queued logs are flushed with retry logic
 - **Resource Exhaustion**:
-  - No specific circuit breaker; relies on platform limits (e.g., Heroku/Node.js memory limits)
-  - Log payloads are small (<2KB) so memory impact is minimal
+   - No specific circuit breaker; relies on platform limits (e.g., Heroku/Node.js memory limits)
+   - Log payloads are small (<2KB) so memory impact is minimal
 - **Data Consistency**:
-  - Foreign key constraints ensure logs reference valid sessions/messages
-  - On deletion of a session, associated messages and logs are cascade-deleted
+   - Foreign key constraints ensure logs reference valid sessions/messages
+   - On deletion of a session, associated messages and logs are cascade-deleted
